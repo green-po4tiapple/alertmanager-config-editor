@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Types, tests, amtool
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      # The unit tests above wrote amtool-out/. Validating it with the real
+      # Alertmanager binary is what catches serializer mistakes our own tests
+      # cannot see in principle — it has already rejected a config we thought
+      # was fine.
+      - name: Validate the export with real amtool
+        run: |
+          docker run --rm -v "$PWD/amtool-out:/cfg" --entrypoint sh \
+            prom/alertmanager:v0.28.1 -c 'amtool check-config /cfg/*.yaml'
+
+      # The self-hosting path has to keep working too, not just the Pages one.
+      - name: Build the Docker image
+        run: docker build -t alertmanager-config-editor .
+
+  build:
+    name: Build the site
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    # Only from the default branch, and only once the tests are green: the demo
+    # link people are handed should never point at a broken build.
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

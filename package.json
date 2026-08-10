@@ -1,0 +1,46 @@
+{
+  "name": "alertmanager-config-editor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser-only editor for the Prometheus Alertmanager routing tree: edit routes, test which receivers an alert reaches, find alerts that are lost silently, export YAML",
+  "type": "module",
+  "homepage": "https://green-po4tiapple.github.io/alertmanager-config-editor/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/green-po4tiapple/alertmanager-config-editor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/green-po4tiapple/alertmanager-config-editor/issues"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "alertmanager",
+    "prometheus",
+    "routing",
+    "yaml",
+    "sre",
+    "observability"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "js-yaml": "^5.2.3",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1",
+    "vitest": "^4.1.10"
+  }
+}
