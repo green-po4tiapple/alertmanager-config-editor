@@ -79,6 +79,12 @@ happened here:
 - **Layout that fixes one defect and ruins the scale.** Widening the rings made
   labels readable and made "fit to screen" 43%. After any layout change, compare the
   canvas size and the fit percentage before and after.
+- **A push is not a deploy.** CI once reported success for half an hour while the
+  live site served the previous build: two workflows pushed to `gh-pages` within a
+  minute, the Pages builder errored, and the newest commit was never built. The
+  publish job now requests a build and does not finish until the served page
+  contains the asset hash it just built. Keep that check — a deploy step that only
+  proves it pushed proves nothing.
 
 ## Adding a language
 

@@ -83,6 +83,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # Needed to request a Pages build explicitly, see the verify step below.
+      pages: write
     # Every publish rewrites the same branch, so they must not overlap. Not
     # cancel-in-progress: a cancelled run could leave the branch half-written.
     concurrency:
@@ -147,6 +149,52 @@ jobs:
             sleep 5
           done
           echo "could not push gh-pages after 3 attempts" >&2
+          exit 1
+
+      # Pushing to gh-pages is not the same thing as the site being served, and the
+      # difference has already bitten: two pushes landed within a minute, the Pages
+      # builder errored, the newest commit was never built, and CI stayed green
+      # while the live site served the previous build for half an hour.
+      #
+      # So the deploy is not considered done until the served page proves it. A
+      # build is requested explicitly rather than waited for, because the implicit
+      # trigger is what got lost in that race.
+      - name: Wait for Pages to actually serve this build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TARGET: ${{ github.event_name == 'pull_request' && format('pr-{0}/', github.event.number) || '' }}
+        run: |
+          set -euo pipefail
+
+          # The hashed asset name is unique per build, which makes it a reliable
+          # witness that what is served is what we just pushed.
+          ASSET=$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' dist/index.html | head -1)
+          echo "expecting $ASSET"
+
+          gh api -X POST "repos/${GH_REPO}/pages/builds" --silent
+
+          for i in $(seq 1 40); do
+            STATUS=$(gh api "repos/${GH_REPO}/pages/builds/latest" --jq '.status')
+            case "$STATUS" in
+              built) echo "build $i: built"; break ;;
+              errored)
+                gh api "repos/${GH_REPO}/pages/builds/latest" --jq '.error.message' >&2
+                echo "::error::Pages build failed" >&2; exit 1 ;;
+              *) echo "build $i: $STATUS"; sleep 10 ;;
+            esac
+          done
+
+          URL="https://${GH_REPO%%/*}.github.io/${GH_REPO#*/}/${TARGET}"
+          for i in $(seq 1 30); do
+            if curl -sf "$URL" | grep -qF "$ASSET"; then
+              echo "$URL serves $ASSET"
+              exit 0
+            fi
+            echo "attempt $i: not served yet"
+            sleep 10
+          done
+          echo "::error::$URL never served $ASSET" >&2
           exit 1
 
       - name: Comment the preview link

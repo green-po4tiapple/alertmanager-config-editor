@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pages: write
     concurrency:
       group: gh-pages
       cancel-in-progress: false
@@ -49,12 +50,20 @@ jobs:
           git rm -rqf "$TARGET"
           git commit -q -m "Remove preview $TARGET"
 
+          PUSHED=no
           for attempt in 1 2 3; do
-            if git push -q origin gh-pages; then exit 0; fi
+            if git push -q origin gh-pages; then PUSHED=yes; break; fi
             echo "push rejected, retrying ($attempt)"
             git fetch -q --depth=1 origin gh-pages
             git rebase -q FETCH_HEAD || git rebase --abort || true
             sleep 5
           done
-          echo "could not push gh-pages after 3 attempts" >&2
-          exit 1
+          if [ "$PUSHED" != yes ]; then
+            echo "could not push gh-pages after 3 attempts" >&2
+            exit 1
+          fi
+
+          # Request a build explicitly. The implicit push trigger is exactly what
+          # got lost when this workflow and the publish job pushed within a minute
+          # of each other, leaving the site stale.
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/pages/builds" --silent || true
