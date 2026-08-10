@@ -1,26 +1,11 @@
 # Alertmanager Routing Tree Editor
 
-An editor for the Prometheus Alertmanager routing tree that runs entirely in your
-browser. Paste your `alertmanager.yml` — or just the `route:` block, or the
-HelmRelease it lives inside — then read the tree, edit it, test which receivers an
-alert actually reaches, and export the YAML back.
+**Some of your alerts never reach anybody, and nothing tells you.**
 
-**[Open the live demo →](https://green-po4tiapple.github.io/alertmanager-config-editor/?demo=1)**
-· [Русская версия README](README.ru.md)
-
-No backend, no build step for the user, no config leaving the page.
-
-> Think of it as the official
-> [routing-tree-editor](https://prometheus.io/webtools/alerting/routing-tree-editor/)
-> plus editing, exact `continue` semantics, a YAML export, and a batch check that
-> tells you which of your alerts are being lost silently.
-
-![Block view with an alert test](docs/img/block-view.png)
-
-## Why
-
-Alertmanager routing is deterministic but easy to misread, and the failure mode is
-silent. The one that costs the most:
+A route matches, none of its children match, and the route has no `receiver` of its
+own — because in Alertmanager a receiver is never inherited from the parent. The
+alert is dropped. No error, no log line, nothing on a dashboard. The config looks
+perfectly reasonable while it happens:
 
 ```yaml
 - matchers:
@@ -28,110 +13,124 @@ silent. The one that costs the most:
   routes:
     - receiver: payments_pager
       matchers: [severity="critical"]
-    - receiver: payments_chat
+    - receiver: payments_warn
       matchers: [severity="warning"]
+    # severity="info" for this team goes nowhere at all
 ```
 
-An alert with `team=payments, severity=info` matches the parent, matches no child,
-and the parent has no `receiver` of its own — because **a receiver is never
-inherited from the parent**. The alert disappears. No error, no log line, nothing in
-any dashboard.
+This tool takes your routing tree and your alerts, runs **all of them through it at
+once**, and lists the ones that arrive nowhere. Then it lets you fix the tree and
+export the YAML back.
 
-This editor badges those routes, and its batch mode counts exactly how many of your
-real alerts fall into them.
+**[Open the live demo →](https://green-po4tiapple.github.io/alertmanager-config-editor/?demo=1)**
+· [Русская версия README](README.ru.md)
+
+Runs entirely in your browser. No backend, no install, and the config never leaves
+the page.
+
+![Batch check: one alert per row, with the lost ones counted](docs/img/batch-check.png)
+
+The `SlowQuery` row is the defect above, found automatically.
+
+## Why not `amtool`?
+
+`amtool config routes test` is the right tool for one question about one alert. It
+answers from the command line, one label set per invocation.
+
+This answers a different question: **which of my alerts, out of all of them, go
+nowhere** — and it needs the whole set to answer it. Feed it
+`/api/v2/alerts`, a `PrometheusRule` dump or a CSV, and every alert gets a row. On
+one real production dump of 322 firing alerts it found 66 that were being dropped
+silently.
+
+Two other things `amtool` does not do: it will not show you the tree, and it will
+not tell you what an edit changed. Here, after you move a route, every row is also
+routed through the tree **as it was before** — so you see "65 of 332 alerts
+re-routed", not "4 lines of YAML changed".
 
 ## What it does
 
 | | |
 |---|---|
+| **Batch check** | An alert dump → "alert → receiver → why", with a **lost** counter. Sources: Alertmanager `/api/v2/alerts`, Prometheus `/api/v1/rules`, a `PrometheusRule` dump, a rule file, or CSV. See [`docs/BATCH-CHECK.md`](docs/BATCH-CHECK.md). |
+| **Routing regression** | Every resolved row is routed through the tree as loaded too, so an edit's blast radius is a number, not a guess. |
 | **Two views over one tree** | A nested list of cards with inline editing, and a diagram. Same model, switch freely. |
 | **Two graph layouts** | **Radial** — the shape of the official routing-tree-editor. **Blocks** — a top-down org chart with matchers inside the nodes and drag&drop re-parenting. |
-| **Structural editing** | Move among siblings, indent/outdent, add child or sibling, delete, drag a route onto a new parent. |
-| **Alert testing** | Enter arbitrary `label=value` pairs and get every receiver the alert reaches, with the outcome of each: delivered / dropped (explicit null) / dropped (no receiver). The path is highlighted in both views. |
-| **Batch check** | Run a whole dump of alerts through the tree: "alert → receiver → why", with a **lost** counter. See [`docs/BATCH-CHECK.md`](docs/BATCH-CHECK.md). |
-| **Routing regression** | After an edit, every row is also routed through the tree as it was loaded, so you see "65 of 332 alerts re-routed" instead of "4 lines of YAML changed". |
-| **Search** | By receiver name or matcher text, with a jump to the route in either view. |
-| **Diff before export** | A line diff against the tree as loaded, free of YAML-normalisation noise. |
-| **Undo/redo** | `⌘/Ctrl+Z` and `⌘/Ctrl+Shift+Z`. One snapshot per text-editing session, not per keystroke. |
-| **Export** | `⌘/Ctrl+E`: the ready `route:` block, or the original file with only that block replaced. |
+| **Alert testing** | Arbitrary `label=value` pairs → every receiver the alert reaches, with the outcome of each: delivered / dropped (explicit null) / dropped (no receiver). The path is highlighted in both views. |
+| **Structural editing** | Move among siblings, indent/outdent, add, delete, drag a route onto a new parent. `⌘/Ctrl+Z` undoes a whole field edit, not one character. |
+| **Export** | The ready `route:` block, or your original file with only that block replaced — comments and secrets carried through byte for byte. |
 | **Fetch from a live Alertmanager** | `GET /api/v2/status` → `config.original`, so nothing has to be pasted by hand. |
-| **Themes and languages** | Light/dark following the system, plus a manual switch. English and Russian interface. |
+| **Themes and languages** | Light/dark following the system. English and Russian interface. |
 
-### Radial layout, as in the original tool
+### Editing, with the alert test open
+
+![Block view with an alert test](docs/img/block-view.png)
+
+### Radial layout, as in the official tool
 
 ![Radial graph](docs/img/graph-radial.png)
 
-### Batch check: which alerts are lost
-
-![Batch check](docs/img/batch-check.png)
-
-The `SlowQuery` row above is the defect from the first section, found automatically.
-
 ## Quick start
+
+Nothing to install to try it — [open the demo](https://green-po4tiapple.github.io/alertmanager-config-editor/?demo=1)
+and press **See it on an example**. To run it locally:
 
 ```bash
 npm ci
 npm run dev        # http://127.0.0.1:5180
 ```
 
-Other commands:
-
 ```bash
 npm test           # unit tests for the core (vitest)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build into dist/
-npm run preview    # serve the production build locally
 ```
-
-Nothing else is needed: open the page, click **Example** to load a demo config, or
-paste your own.
 
 ## Security model
 
-This is the part worth reading before you paste a production config.
+Worth reading before you paste a production config into a page you just found.
 
 - **The config never leaves the page.** Parsing, editing and export all happen in
   the browser. The app makes no requests on its own.
 - **The only outbound requests are ones you trigger**, and only to addresses you
   typed in yourself: fetching the config from Alertmanager, pulling rules and firing
   alerts, and — if you enable it — label enrichment from Prometheus/VictoriaMetrics.
-  Those requests carry API paths and rule expressions. **The routing tree and the
-  pasted config are never sent anywhere.** Cookies are not sent
-  (`credentials: 'omit'`).
+  Those carry API paths and rule expressions. **The routing tree and the pasted
+  config are never sent anywhere.** Cookies are not sent (`credentials: 'omit'`).
 - **Nothing is persisted.** The config lives only in the tab's memory — no
-  `localStorage`, no `sessionStorage`. Reloading the page gives you a blank paste
-  screen. The single exception is your language choice.
+  `localStorage`, no `sessionStorage`. Reloading gives you a blank paste screen. The
+  single exception is your language choice.
 - **Only names are read from `receivers:`.** Tokens, URLs and `*_configs` never
   enter application state at all, sops ciphertexts in a HelmRelease included. There
   is a test asserting this.
 - **The whole-file export is a text splice**, not a YAML re-dump, so secrets and
   comments in your original file are carried through character for character.
 
-## Self-hosting with Docker
-
-Useful when you want it next to your own Alertmanager — a page served over plain
-HTTP may talk to `http://` endpoints, which a browser blocks from an HTTPS page as
-mixed content.
+If that is still not enough — and for an air-gapped network it should not be — run
+it yourself:
 
 ```bash
 docker build -t alertmanager-config-editor .
 docker run --rm -p 8080:8080 alertmanager-config-editor   # http://localhost:8080
 ```
 
-The image is `nginx-unprivileged` (~76 MB, listens on 8080, needs no root) with a
-`/healthz` endpoint. It runs under a read-only root filesystem given two tmpfs
-mounts:
+The image is `nginx-unprivileged` (~76 MB, listens on 8080, needs no root, has
+`/healthz`) and runs under a read-only root filesystem:
 
 ```bash
 docker run --rm --read-only --user 101:101 --cap-drop ALL \
   --tmpfs /tmp --tmpfs /var/cache/nginx -p 8080:8080 alertmanager-config-editor
 ```
 
-## Verifying the export
+Self-hosting has one practical advantage: a page served over plain HTTP may query
+`http://` endpoints, which a browser blocks from an HTTPS page as mixed content.
+
+## Is the export trustworthy?
 
 `npm test` writes finished Alertmanager configs, produced by this project's own
 serializer, into `amtool-out/`. CI then validates them with the **real** Alertmanager
-binary. The same locally:
+binary — that check has already rejected a config the unit tests were happy with.
+The same locally:
 
 ```bash
 npm test
@@ -146,13 +145,18 @@ the variable is unset:
 AM_CONFIG=/path/to/alertmanager.yml npm test
 ```
 
+Routing semantics are translated line by line from Alertmanager's
+`dispatch/route.go` — including the parts that are easy to get wrong, such as
+`continue: true` producing several receivers and `label!~".*"` never matching
+anything. See [`docs/ROUTING-SEMANTICS.md`](docs/ROUTING-SEMANTICS.md).
+
 ## Documentation
 
 - [`AGENTS.md`](AGENTS.md) — start here if you are going to change the code.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — layers, invariants, extension
   points.
-- [`docs/ROUTING-SEMANTICS.md`](docs/ROUTING-SEMANTICS.md) — exact Alertmanager
-  semantics, checked against `dispatch/route.go`, and the traps real configs hit.
+- [`docs/ROUTING-SEMANTICS.md`](docs/ROUTING-SEMANTICS.md) — exact semantics and the
+  traps real configs hit.
 - [`docs/YAML-DIALECT.md`](docs/YAML-DIALECT.md) — what the parser accepts and how
   the serializer quotes things.
 - [`docs/BATCH-CHECK.md`](docs/BATCH-CHECK.md) — the batch check in detail.
@@ -160,3 +164,7 @@ AM_CONFIG=/path/to/alertmanager.yml npm test
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+<sub>Keywords: visualize alertmanager routing tree · test alertmanager routing ·
+which receiver will get my alert · debug alertmanager config · alerts silently
+dropped · alertmanager route tester · prometheus alert routing visualization</sub>

@@ -370,9 +370,11 @@ code {
   font-size: 20px;
 }
 
+/* Secondary now that the example is the primary path — a 320px box pushed
+   everything below it past the fold. */
 .load-card textarea {
   width: 100%;
-  min-height: 320px;
+  min-height: 200px;
   resize: vertical;
   font-family: var(--mono);
   font-size: 12.5px;
@@ -411,6 +413,41 @@ code {
   white-space: pre-wrap;
 }
 
+/* The hero: what the tool does, and the one button a first-time visitor can use. */
+.load-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.load-lede {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  max-width: 70ch;
+}
+
+.load-lede b {
+  color: var(--text);
+}
+
+.load-cta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn.big {
+  font-size: 14px;
+  padding: 10px 18px;
+}
+
+/*
+ * Collapsed by default. Someone who just arrived is not going to hand over their
+ * Alertmanager URL, and putting that request first made the page look like it was
+ * asking for production access before showing anything.
+ */
 .am-pull {
   display: flex;
   flex-direction: column;
@@ -419,6 +456,24 @@ code {
   border-radius: 8px;
   background: var(--surface-2);
   padding: 12px 14px;
+}
+
+.am-pull > summary {
+  cursor: pointer;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  user-select: none;
+}
+
+.am-pull > summary:hover {
+  color: var(--text);
+}
+
+/* Without a gap the summary and the first field collide when opened. */
+.am-pull[open] > summary {
+  margin-bottom: 4px;
 }
 
 .or-divider {
