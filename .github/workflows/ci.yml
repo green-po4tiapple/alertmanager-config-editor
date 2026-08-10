@@ -153,6 +153,10 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # This job never checks the source out, so gh cannot infer the repository
+          # from a git remote and fails with "not a git repository". GH_REPO tells
+          # it directly.
+          GH_REPO: ${{ github.repository }}
           URL: https://green-po4tiapple.github.io/alertmanager-config-editor/pr-${{ github.event.number }}/
         run: |
           BODY=$(printf '%s\n\n%s\n\n%s' \

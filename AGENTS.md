@@ -102,3 +102,24 @@ demonstrates nothing.
 `deviceScaleFactor: 2`, English UI. They are committed rather than built in CI; a
 generation script is not shipped because it would need puppeteer as a dependency for
 everyone. Regenerate them by hand when the UI changes noticeably.
+
+## Getting a change in
+
+`main` is protected: no direct pushes, and the `Types, tests, amtool` check has to
+be green. That applies to everyone, maintainers included.
+
+```bash
+git switch -c my-change
+# … work …
+npm run typecheck && npm test
+git push -u origin my-change
+gh pr create --fill
+```
+
+Every pull request from a branch in this repository gets its own deployed copy at
+`/pr-<number>/` on the Pages site, and a bot comments the link. It is rebuilt on
+each push and deleted when the pull request closes — so a reviewer can click
+through the actual change instead of taking a screenshot on trust.
+
+Pull requests from forks run with a read-only token and therefore get no preview.
+For those, CI attaches the built site as a `site` artifact on the run instead.
