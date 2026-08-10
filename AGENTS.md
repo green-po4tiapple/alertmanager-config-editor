@@ -103,6 +103,11 @@ demonstrates nothing.
 generation script is not shipped because it would need puppeteer as a dependency for
 everyone. Regenerate them by hand when the UI changes noticeably.
 
+`docs/img/social-preview.png` (1280×640) is the card shown when a link to the
+repository is pasted into Slack, Telegram or a chat. GitHub exposes no API for it:
+after changing the file, upload it by hand under **Settings → General → Social
+preview**.
+
 ## Getting a change in
 
 `main` is protected: no direct pushes, and the `Types, tests, amtool` check has to

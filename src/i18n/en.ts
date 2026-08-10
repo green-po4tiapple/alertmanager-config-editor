@@ -335,11 +335,15 @@ export const en: Dict = {
 
   load: {
     title: 'Alertmanager routing tree',
+    lede:
+      'Shows the whole routing tree and runs **your entire alert dump through it at once** — ' +
+      'including the alerts that reach no receiver at all and are lost silently. The tree can ' +
+      'be edited right here and exported back as YAML.',
+    exampleHint: 'A demo config with two typical defects hidden in it. No data of your own needed.',
+    orYourOwn: 'or load your own config',
     subtitle:
-      'Paste a whole `alertmanager_config.yaml`, or just the `route:` block (a bare list of ' +
-      'routes starting with `- matchers:` works too) — or the HelmRelease it lives inside. ' +
-      'Parsing happens in the browser; the config never leaves the page and is never written ' +
-      'to browser storage.',
+      'Paste a whole `alertmanager.yml`, or just the `route:` block (a bare list of routes ' +
+      'starting with `- matchers:` works too) — or the HelmRelease it lives inside.',
     pullTitle: 'Fetch from a running Alertmanager',
     pullHint:
       '`GET /api/v2/status` → `config.original`. The scheme is optional — `https` is assumed, ' +
@@ -352,16 +356,10 @@ export const en: Dict = {
     authNeeded: 'authentication required',
     username: 'username',
     password: 'password',
-    orPaste: 'or paste it yourself',
     loadTree: 'Load tree',
     openFile: 'Open file…',
-    loadExample: 'Example',
-    exampleTitle: 'Load a demo config — try the editor without using your own data',
+    loadExample: 'See it on an example →',
     dropHint: 'or drop a file here · ⌘/Ctrl+Enter',
-    factFeatures:
-      '**What this editor does.** Two views over one tree (a nested block list and a diagram), ' +
-      'moving and re-parenting routes, testing an arbitrary label set and seeing every receiver ' +
-      'it reaches (`continue` included), and exporting a ready `route:` block.',
     factSecrets:
       '**Secrets.** When a whole file is pasted, only the names are taken from `receivers:`. ' +
       'Tokens, URLs and `*_configs` never enter application state at all, sops ciphertexts in a ' +
