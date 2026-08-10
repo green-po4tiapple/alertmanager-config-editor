@@ -1,0 +1,60 @@
+name: Remove PR preview
+
+# A preview directory outlives its pull request unless something deletes it.
+# Kept in its own workflow so the CI file does not have to guard every job
+# against the `closed` event.
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    name: Remove pr-${{ github.event.number }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: gh-pages
+      cancel-in-progress: false
+    steps:
+      - name: Delete the preview directory
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET: pr-${{ github.event.number }}
+        run: |
+          set -euo pipefail
+
+          rm -rf site && mkdir site && cd site
+          git init -q
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add origin \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          if ! git fetch --depth=1 origin gh-pages 2>/dev/null; then
+            echo "no gh-pages branch, nothing to clean"
+            exit 0
+          fi
+          git checkout -q FETCH_HEAD
+          git checkout -q -B gh-pages
+
+          if [ ! -d "$TARGET" ]; then
+            echo "$TARGET does not exist, nothing to clean"
+            exit 0
+          fi
+
+          git rm -rqf "$TARGET"
+          git commit -q -m "Remove preview $TARGET"
+
+          for attempt in 1 2 3; do
+            if git push -q origin gh-pages; then exit 0; fi
+            echo "push rejected, retrying ($attempt)"
+            git fetch -q --depth=1 origin gh-pages
+            git rebase -q FETCH_HEAD || git rebase --abort || true
+            sleep 5
+          done
+          echo "could not push gh-pages after 3 attempts" >&2
+          exit 1

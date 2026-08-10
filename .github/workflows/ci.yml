@@ -61,27 +61,104 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v4
+      # Uploaded unconditionally, so a pull request from a fork — which cannot be
+      # given a write token, and therefore gets no preview — still has something
+      # a reviewer can download and open.
+      - uses: actions/upload-artifact@v4
         with:
+          name: site
           path: dist
+          retention-days: 7
 
-  deploy:
-    name: Deploy to GitHub Pages
-    # Only from the default branch, and only once the tests are green: the demo
-    # link people are handed should never point at a broken build.
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+  publish:
+    name: Publish
     needs: build
+    # Pull requests from forks run with a read-only token, so they cannot publish
+    # a preview. They fall back to the build artifact above.
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      contents: write
+      pull-requests: write
+    # Every publish rewrites the same branch, so they must not overlap. Not
+    # cancel-in-progress: a cancelled run could leave the branch half-written.
     concurrency:
-      group: pages
+      group: gh-pages
       cancel-in-progress: false
     steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: dist
+
+      - name: Publish to the gh-pages branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Empty for main (site root), "pr-42" for a pull request.
+          TARGET: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || '' }}
+        run: |
+          set -euo pipefail
+
+          rm -rf site && mkdir site && cd site
+          git init -q
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add origin \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          if git fetch --depth=1 origin gh-pages 2>/dev/null; then
+            git checkout -q FETCH_HEAD
+            git checkout -q -B gh-pages
+          else
+            git checkout -q --orphan gh-pages
+            git rm -rqf . 2>/dev/null || true
+          fi
+
+          if [ -z "$TARGET" ]; then
+            # Main deploy: replace the site root but keep every open preview.
+            find . -mindepth 1 -maxdepth 1 \
+              -not -name '.git' -not -name 'pr-*' -exec rm -rf {} +
+            cp -R ../dist/. .
+          else
+            rm -rf "$TARGET"
+            mkdir -p "$TARGET"
+            cp -R ../dist/. "$TARGET/"
+          fi
+
+          # Without this, GitHub Pages runs the output through Jekyll.
+          touch .nojekyll
+
+          git add -A
+          if git diff --cached --quiet; then
+            echo "nothing changed, skipping"
+            exit 0
+          fi
+          git commit -q -m "Publish ${TARGET:-site} from ${GITHUB_SHA::7}"
+
+          # Another job may have pushed between our fetch and this push.
+          for attempt in 1 2 3; do
+            if git push -q origin gh-pages; then exit 0; fi
+            echo "push rejected, retrying ($attempt)"
+            git fetch -q --depth=1 origin gh-pages
+            git rebase -q FETCH_HEAD || git rebase --abort || true
+            sleep 5
+          done
+          echo "could not push gh-pages after 3 attempts" >&2
+          exit 1
+
+      - name: Comment the preview link
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          URL: https://green-po4tiapple.github.io/alertmanager-config-editor/pr-${{ github.event.number }}/
+        run: |
+          BODY=$(printf '%s\n\n%s\n\n%s' \
+            "**Preview:** ${URL}?demo=1" \
+            "Built from ${GITHUB_SHA::7}. It is replaced on every push to this branch and removed when the pull request closes." \
+            "_Automated comment._")
+          # --edit-last keeps one comment per PR instead of one per push.
+          gh pr comment "${{ github.event.number }}" --edit-last --body "$BODY" \
+            || gh pr comment "${{ github.event.number }}" --body "$BODY"
